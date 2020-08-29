@@ -9,12 +9,7 @@ import {
 } from "https://deno.land/std/http/server.ts";
 import { LapisResponse } from "./response.ts";
 import { LapisRequest } from "./request.ts";
-
-type MiddlewareFunction = (
-  req: LapisRequest,
-  res: LapisResponse,
-  next?: Function,
-) => any;
+import { Router, MiddlewareFunction } from "./router.ts";
 
 export class Lapis {
   port?: number;
@@ -22,7 +17,7 @@ export class Lapis {
   certFile?: string;
   keyFile?: string;
   server?: Server;
-  middlewares: Function[] = [];
+  middlewares: MiddlewareFunction[] = [];
 
   end(req: LapisRequest, res: LapisResponse) {
     res.status(404).send(`Cannot ${req.method} ${req.url}`);
@@ -48,6 +43,10 @@ export class Lapis {
 
   use(middleware: MiddlewareFunction) {
     this.middlewares.push(middleware);
+  }
+
+  useRouter(router: Router) {
+    this.middlewares = this.middlewares.concat(router.routes);
   }
 
   get(path: string, middleware: MiddlewareFunction) {
