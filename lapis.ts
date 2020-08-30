@@ -9,7 +9,11 @@ import {
 } from "https://deno.land/std/http/server.ts";
 import { LapisResponse } from "./response.ts";
 import { LapisRequest } from "./request.ts";
-import { Router, MiddlewareFunction } from "./router.ts";
+import {
+  Router,
+  MiddlewareFunction,
+  ErrorMiddlewareFunction,
+} from "./router.ts";
 
 export class Lapis {
   port?: number;
@@ -17,7 +21,7 @@ export class Lapis {
   certFile?: string;
   keyFile?: string;
   server?: Server;
-  middlewares: MiddlewareFunction[] = [];
+  middlewares: (MiddlewareFunction | ErrorMiddlewareFunction)[] = [];
 
   end(req: LapisRequest, res: LapisResponse) {
     res.status(404).send(`Cannot ${req.method} ${req.url}`);
@@ -25,52 +29,44 @@ export class Lapis {
 
   async _loop() {
     if (this.server) {
-      for await (const req of this.server!) {
-        let res = new LapisResponse(req);
-        const request = new LapisRequest(req);
-        await request.parseBody();
+      for await (const request of this.server!) {
+        let res = new LapisResponse(request);
+        const req = new LapisRequest(request);
+        await req.parseBody();
         res.headers?.set("Content-Type", "application/json");
         const middlewares = [...this.middlewares, this.end].map(
           (
             middleware,
             i,
-          ) => () => middleware(request, res, middlewares[i + 1]),
+          ) =>
+            (error?: Error) => {
+              if (middleware.length === 4) {
+                return (middleware as ErrorMiddlewareFunction)(
+                  error,
+                  req,
+                  res,
+                  middlewares[i + 1],
+                );
+              } else {
+                return (middleware as MiddlewareFunction)(
+                  req,
+                  res,
+                  middlewares[i + 1],
+                );
+              }
+            },
         );
         middlewares[0]();
       }
     }
   }
 
-  use(middleware: MiddlewareFunction) {
-    this.middlewares.push(middleware);
-  }
-
-  useRouter(router: Router) {
-    this.middlewares = this.middlewares.concat(router.routes);
-  }
-
-  get(path: string, middleware: MiddlewareFunction) {
-    this.middlewares.push(
-      (req: LapisRequest, res: LapisResponse, next: Function) => {
-        if (req.method === "GET" && req.url === path) {
-          return middleware(req, res, next);
-        } else {
-          return next();
-        }
-      },
-    );
-  }
-
-  post(path: string, middleware: MiddlewareFunction) {
-    this.middlewares.push(
-      (req: LapisRequest, res: LapisResponse, next: Function) => {
-        if (req.method === "POST" && req.url === path) {
-          return middleware(req, res, next);
-        } else {
-          return next();
-        }
-      },
-    );
+  use(middleware: MiddlewareFunction | ErrorMiddlewareFunction | Router) {
+    if (middleware instanceof Router) {
+      this.middlewares = this.middlewares.concat(middleware.routes);
+    } else {
+      this.middlewares.push(middleware);
+    }
   }
 
   listen(options: HTTPOptions): Promise<void> {
