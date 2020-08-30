@@ -11,69 +11,107 @@ import { LapisResponse } from "./response.ts";
 import { LapisRequest } from "./request.ts";
 import {
   Router,
-  MiddlewareFunction,
-  ErrorMiddlewareFunction,
 } from "./router.ts";
+import {
+  Middleware,
+  ErrorMiddlewareFunction,
+  MiddlewareFunction,
+} from "./middleware.ts";
 
-export class Lapis {
+export class Lapis extends Router {
   port?: number;
   hostname?: string;
   certFile?: string;
   keyFile?: string;
   server?: Server;
-  middlewares: (MiddlewareFunction | ErrorMiddlewareFunction)[] = [];
 
-  end(req: LapisRequest, res: LapisResponse) {
-    res.status(404).send(`Cannot ${req.method} ${req.url}`);
-  }
-
-  async _loop() {
+  private async run() {
     if (this.server) {
       for await (const request of this.server!) {
         let res = new LapisResponse(request);
         const req = new LapisRequest(request);
         await req.parseBody();
-        res.headers?.set("Content-Type", "application/json");
-        const middlewares = [...this.middlewares, this.end].map(
-          (
-            middleware,
-            i,
-          ) =>
-            (error?: Error) => {
-              if (middleware.length === 4) {
-                return (middleware as ErrorMiddlewareFunction)(
+        // get middlewares that match the request
+        let matchingMiddlewares = Middleware.findMatching(
+          this.middlewares,
+          req,
+        );
+        // create functions which take optional error parameter and call middleware
+        const middlewaresToRun = matchingMiddlewares.map((
+          middleware,
+          i,
+        ) =>
+          (error?: Error): any => {
+            // if there are no more defined middlewares, fallback to the default one
+            let next = middlewaresToRun[i + 1]
+              ? middlewaresToRun[i + 1]
+              : ((error?: any) =>
+                error
+                  ? this.defaultErrorHandler(error, req, res)
+                  : this.defaultHandler(req, res));
+            // there can either be an error or not
+            if (error) {
+              // if this middleware is an error handler - ok
+              if (middleware.handler.length === 4) {
+                return (middleware.handler as ErrorMiddlewareFunction)(
                   error,
                   req,
                   res,
-                  middlewares[i + 1],
+                  next,
                 );
               } else {
-                return (middleware as MiddlewareFunction)(
+                // if not, call the next middleware wrapper (hopefully it will recursively reach an error handler)
+                return next(error);
+              }
+            } else {
+              if (middleware.handler.length === 4) {
+                return next();
+              } else {
+                return (middleware.handler as MiddlewareFunction)(
                   req,
                   res,
-                  middlewares[i + 1],
+                  next,
                 );
               }
-            },
+            }
+          }
         );
-        middlewares[0]();
+        try {
+          if (middlewaresToRun.length === 0) {
+            this.defaultHandler(req, res);
+          } else {
+            middlewaresToRun[0]();
+          }
+        } catch (err) {
+          this.defaultErrorHandler(err, req, res);
+        }
       }
     }
   }
 
-  use(middleware: MiddlewareFunction | ErrorMiddlewareFunction | Router) {
-    if (middleware instanceof Router) {
-      this.middlewares = this.middlewares.concat(middleware.routes);
-    } else {
-      this.middlewares.push(middleware);
-    }
+  private defaultHandler(req: LapisRequest, res: LapisResponse) {
+    res.status(404).send({
+      code: 404,
+      message: `Cannot ${req.method} ${req.url}`,
+    });
+  }
+
+  private defaultErrorHandler(
+    err: any,
+    req: LapisRequest,
+    res: LapisResponse,
+  ) {
+    console.error(err);
+    res.status(500).send({
+      ok: false,
+    });
   }
 
   listen(options: HTTPOptions): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
         this.server = serve(options);
-        this._loop();
+        this.run();
         resolve();
       } catch (e) {
         reject(e);
@@ -81,8 +119,7 @@ export class Lapis {
     });
   }
 
-  listenTLS(options: HTTPSOptions): Promise<void> {
-    const server = serveTLS(options);
-    return Promise.resolve();
+  listenTLS() {
+    throw new Error("NotImplemented");
   }
 }
