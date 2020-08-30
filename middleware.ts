@@ -38,9 +38,10 @@ export class Middleware {
 
   matches(request: LapisRequest): boolean {
     if (this.endpoint) {
-      if (this.endpoint.method === HTTPMethods.ANY) {
-        return true;
-      } else if (this.endpoint.method === request.method) {
+      if (
+        this.endpoint.method === HTTPMethods.ANY ||
+        this.endpoint.method === request.method
+      ) {
         // if path is a function, it returns the actual path - kinda like computed properties
         // it's for router using another router, ex. router('/api') uses another router2
         // so every route in router2 has to be prepended with '/api'

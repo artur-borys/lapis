@@ -44,7 +44,7 @@ Deno.test("sanitize", () => {
 
 Deno.test("matchWithParams", () => {
   let model = "/api/user/:id";
-  let request = "/api/user/1";
+  let request = "/api/user/1?sort=desc";
   assert(matchWithParams(request, model));
 
   model = "/api/user/:id/post/:post_id";
@@ -81,5 +81,13 @@ Deno.test("matchPath", () => {
 
   url = "/api/user/1";
   model = "/api/user/:id";
+  assert(matchPath(url, model));
+
+  url = "/api/user/1/posts?sort=title";
+  model = "/api/user/:id/posts";
+  assert(matchPath(url, model));
+
+  url = "/api/user/1/posts";
+  model = "/api/*";
   assert(matchPath(url, model));
 });

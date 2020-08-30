@@ -102,8 +102,12 @@ export function matchPath(requestUrl: string, modelUrl: string): boolean {
   */
   const noQueryString = requestUrl.split("?")[0];
   if (hasParams(modelUrl)) {
-    return matchWithParams(requestUrl, modelUrl);
+    return matchWithParams(noQueryString, modelUrl);
   } else {
-    return sanitize(noQueryString) === sanitize(modelUrl);
+    if (modelUrl.endsWith("*")) {
+      return sanitize(noQueryString).startsWith(modelUrl.slice(0, -2));
+    } else {
+      return sanitize(noQueryString) === sanitize(modelUrl);
+    }
   }
 }

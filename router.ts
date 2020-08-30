@@ -53,7 +53,12 @@ export class Router {
         middlewareHandler.middlewares,
       );
     } else {
-      this._middlewares.push(new Middleware(middlewareHandler));
+      this._middlewares.push(
+        new Middleware(middlewareHandler, {
+          path: () => `${this._base}/*`,
+          method: HTTPMethods.ANY,
+        }),
+      );
     }
   }
 
