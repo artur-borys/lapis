@@ -25,7 +25,6 @@ export class LapisResponse {
       }
       this.response.body = data;
     }
-    console.log(this.response);
     this.request.respond(this.response);
   }
 
