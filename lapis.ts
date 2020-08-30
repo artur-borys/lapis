@@ -45,7 +45,10 @@ export class Lapis extends Router {
             // if there are no more defined middlewares, fallback to the default one
             let next = middlewaresToRun[i + 1]
               ? middlewaresToRun[i + 1]
-              : () => this.defaultHandler(req, res);
+              : ((error?: any) =>
+                error
+                  ? this.defaultErrorHandler(error, req, res)
+                  : this.defaultHandler(req, res));
             // there can either be an error or not
             if (error) {
               // if this middleware is an error handler - ok
@@ -74,21 +77,33 @@ export class Lapis extends Router {
           }
         );
         try {
-          middlewaresToRun[0]();
+          if (middlewaresToRun.length === 0) {
+            this.defaultHandler(req, res);
+          } else {
+            middlewaresToRun[0]();
+          }
         } catch (err) {
-          res.status(500).send({
-            ok: false,
-            error: err.message,
-          });
+          this.defaultErrorHandler(err, req, res);
         }
       }
     }
   }
 
-  defaultHandler(req: LapisRequest, res: LapisResponse) {
+  private defaultHandler(req: LapisRequest, res: LapisResponse) {
     res.status(404).send({
       code: 404,
       message: `Cannot ${req.method} ${req.url}`,
+    });
+  }
+
+  private defaultErrorHandler(
+    err: any,
+    req: LapisRequest,
+    res: LapisResponse,
+  ) {
+    console.error(err);
+    res.status(500).send({
+      ok: false,
     });
   }
 
@@ -102,5 +117,9 @@ export class Lapis extends Router {
         reject(e);
       }
     });
+  }
+
+  listenTLS() {
+    throw new Error("NotImplemented");
   }
 }
