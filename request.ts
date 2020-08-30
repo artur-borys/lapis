@@ -89,4 +89,8 @@ export class LapisRequest {
   get contentLength() {
     return this.request.contentLength;
   }
+
+  get remoteAddr() {
+    return this.request.conn.remoteAddr;
+  }
 }
