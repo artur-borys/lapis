@@ -9,7 +9,7 @@ export interface QueryOrParams {
 
 export class LapisRequest {
   private request: ServerRequest;
-  private _body?: string | object;
+  private _body?: any;
   private _query: QueryOrParams;
   private _params: QueryOrParams = {};
 
@@ -58,7 +58,6 @@ export class LapisRequest {
       const contentType = this.headers.get("Content-Type");
       const bodyRaw = await Deno.readAll(this.request.body);
       const body = new TextDecoder("utf-8").decode(bodyRaw);
-      console.log(body);
       if (contentType === "application/json") {
         this._body = JSON.parse(body.toString());
       } else if (contentType === "text/plain") {
