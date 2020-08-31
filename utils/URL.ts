@@ -77,7 +77,7 @@ export function extractParams(
   let params: QueryOrParams = {};
   if (hasParams(modelUrl) && matchWithParams(requestUrl, modelUrl)) {
     const modelParts = modelUrl.split("/");
-    const requestParts = requestUrl.split("/");
+    const requestParts = requestUrl.split("?")[0].split("/");
     for (let i = 0; i < modelParts.length; i++) {
       if (modelParts[i].startsWith(":")) {
         const name = modelParts[i].slice(1);
@@ -100,14 +100,16 @@ export function matchPath(requestUrl: string, modelUrl: string): boolean {
   TODO:
     - match with parameters like /user/:id
   */
-  const noQueryString = requestUrl.split("?")[0];
+  modelUrl = sanitize(modelUrl);
+  const noQueryString = sanitize(requestUrl.split("?")[0]);
   if (hasParams(modelUrl)) {
     return matchWithParams(noQueryString, modelUrl);
   } else {
+    // only middleware can have * in path so we don't have to look for params
     if (modelUrl.endsWith("*")) {
-      return sanitize(noQueryString).startsWith(modelUrl.slice(0, -2));
+      return noQueryString.startsWith(modelUrl.slice(0, -2));
     } else {
-      return sanitize(noQueryString) === sanitize(modelUrl);
+      return noQueryString === modelUrl;
     }
   }
 }

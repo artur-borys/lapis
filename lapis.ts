@@ -1,12 +1,8 @@
 import {
   serve,
   HTTPOptions,
-  HTTPSOptions,
-  serveTLS,
   Server,
-  ServerRequest,
-  Response,
-} from "https://deno.land/std/http/server.ts";
+} from "https://deno.land/std@0.67.0/http/server.ts";
 import { LapisResponse } from "./response.ts";
 import { LapisRequest } from "./request.ts";
 import {
@@ -42,6 +38,7 @@ export class Lapis extends Router {
           i,
         ) =>
           (error?: Error): any => {
+            middleware.setParams(req);
             // if there are no more defined middlewares, fallback to the default one
             let next = middlewaresToRun[i + 1]
               ? middlewaresToRun[i + 1]
@@ -107,6 +104,10 @@ export class Lapis extends Router {
     });
   }
 
+  /**
+   * Starts an http server with given options
+   * @param {HTTPOptions} options - options for server instance 
+   */
   listen(options: HTTPOptions): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
@@ -119,6 +120,9 @@ export class Lapis extends Router {
     });
   }
 
+  /**
+   * Currently not implemented - will be in the future
+   */
   listenTLS() {
     throw new Error("NotImplemented");
   }

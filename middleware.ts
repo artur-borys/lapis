@@ -1,4 +1,4 @@
-import { matchPath } from "./utils/URL.ts";
+import { matchPath, extractParams } from "./utils/URL.ts";
 import { LapisRequest } from "./request.ts";
 import { LapisResponse } from "./response.ts";
 import { HTTPMethods } from "./router.ts";
@@ -24,6 +24,11 @@ export class Middleware {
   private endpoint?: Endpoint;
   handler: MiddlewareFunction | ErrorMiddlewareFunction;
 
+  /**
+   * 
+   * @param handler - the function that handles request (or error)
+   * @param endpoint - optional endpoint to match (path and method)
+   */
   constructor(
     handler: MiddlewareFunction | ErrorMiddlewareFunction,
     endpoint?: Endpoint,
@@ -32,11 +37,23 @@ export class Middleware {
     this.endpoint = endpoint;
   }
 
-  get handle() {
-    return this.handler;
+  /**
+   * Sets request parameters, based on request URL and this endpoint's path
+   * @param {LapisRequest} req - the request
+   */
+  setParams(req: LapisRequest): void {
+    let params = {};
+    if (this.endpoint) {
+      const path = this.endpoint.path instanceof Function
+        ? this.endpoint.path()
+        : this.endpoint.path;
+      params = extractParams(req.url, path);
+    }
+
+    req.params = params;
   }
 
-  matches(request: LapisRequest): boolean {
+  private matches(request: LapisRequest): boolean {
     if (this.endpoint) {
       if (
         this.endpoint.method === HTTPMethods.ANY ||
@@ -56,6 +73,11 @@ export class Middleware {
     return true;
   }
 
+  /**
+   * Returns middlewares from given collection, that match given request (based on path and method)
+   * @param middlewares - middlewares to look through
+   * @param request - request as filter param
+   */
   static findMatching(
     middlewares: Middleware[],
     request: LapisRequest,

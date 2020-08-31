@@ -65,7 +65,7 @@ Deno.test("hasParams", () => {
 });
 
 Deno.test("extractParams", () => {
-  let request = "/api/user/1/post/2";
+  let request = "/api/user/1/post/2?name=123";
   let model = "/api/user/:id/post/:post_id";
   let expected: QueryOrParams = {
     id: "1",
