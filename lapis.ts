@@ -13,6 +13,7 @@ import {
   ErrorMiddlewareFunction,
   MiddlewareFunction,
 } from "./middleware.ts";
+import { CookieJar } from "./cookie_jar.ts";
 
 export class Lapis extends Router {
   port?: number;
@@ -125,5 +126,19 @@ export class Lapis extends Router {
    */
   listenTLS() {
     throw new Error("NotImplemented");
+  }
+
+  /**
+   * Middleware that adds cookies to request and response
+   * @see CookieJar
+   * @param {LapisRequest} req 
+   * @param {LapisResponse} res 
+   * @param {Function} next 
+   */
+  static cookies(req: LapisRequest, res: LapisResponse, next: Function) {
+    const cookieJar = new CookieJar(req, res);
+    req.cookies = cookieJar;
+    res.cookies = cookieJar;
+    next();
   }
 }
