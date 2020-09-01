@@ -5,81 +5,194 @@ I will try to make it resemble `express` in a way. It's a wrapper around deno's 
 
 You can use this module if you wish, but it's not production ready and probably never will be - it's just for my own skills development.
 
+## Features
+
+- middlewares - standard and error handlers. Can be used on server instance and on routers
+- routing - you can create and connect routers. Each router can have a base path
+- path and query params
+- cookies
+- request data parsing
+  - JSON
+  - plain text
+- response encoding
+  - JSON
+  - plain text
+
 ## Example
 
 ```typescript
-import { Lapis, Router, LapisRequest, LapisResponse } from "./mod.ts";
-
+import { Lapis, Router, MiddlewareFunction } from "./mod.ts";
 const PORT = 3000;
-
-// Create a Lapis instance
 const lapis = new Lapis();
+const apiRouter = new Router("/api");
+const usersRouter = new Router("/users");
+const postsRouter = new Router("/posts");
 
-// Create a router instance. Neccessary if you want to specify routes
-// You can pass a baseURL parameter that will be prepended to all routes.
-// Default is "/".
-const router = new Router("/api");
-
-// Define a middleware
-function logger(req: LapisRequest, res: LapisResponse, next: Function) {
-  console.log(`Got a request: ${req.method} ${req.url}`);
+// currently it's best to define standard middleware as a separate named function
+// to get type hints - use() recognizes only Router and ErrorMiddlewareFunction for some reason
+// I need to sort it out - I'm new to TypeScript
+const requestLogger: MiddlewareFunction = (req, res, next) => {
+  console.log(
+    `Got a request from ${req.remoteAddr.hostname}: ${req.method} ${req.url}`
+  );
   next();
-}
+};
 
-// use middleware on lapis instance (logging before route handling!)
-lapis.use(logger);
+lapis.use(requestLogger);
+lapis.use(Lapis.cookies);
 
-// Define some routes
-router.get("/user/:id", (req, res, next) => {
-  const user = users.find((user) => {
-    return user.id === Number(req.params.id);
-  });
-  res.send(user);
-});
-
-router.get("/user/:id/posts", (req, res, next) => {
-  const _posts = posts.filter((post) => {
-    return post.userId === Number(req.params.id);
-  });
-  res.send(_posts);
-});
-
-router.post("/user/:id/post", (req, res, next) => {
-  const newPost = {
-    id: posts.length + 1,
-    userId: Number(req.params.id),
-    content: req.body.content,
-  };
-  posts.push(newPost);
-  res.status(201).send(newPost);
-});
-
-router.get("/posts", (req, res, next) => {
-  res.send(posts);
-});
-
-router.get("/error", (req, res, next) => {
-  next(new Error("SomeError"));
-});
-
-// use created router
-lapis.use(router);
-
-// use error middleware (at the end! IMPORTANT)
-// error middleware has EXACTLY 4 parameters - very important
-lapis.use((error, req, res, next) => {
-  if (error) {
-    return res.send({
-      ok: false,
-      error: error.message,
-    });
+lapis.get("/", (req, res) => {
+  console.log(req.cookies?.toString());
+  if (req.cookies?.has("someCookie")) {
+    res.cookies?.delete("someCookie");
   } else {
-    next!();
+    res.cookies?.set({ name: "someCookie", value: "someValue" });
+  }
+
+  res.send("Welcome to my API server");
+});
+
+apiRouter.get("/error", (req, res, next) => {
+  // this will be handled by error handler set on lapis instance
+  next(new Error("Oh no! Expected error has occured!"));
+});
+
+apiRouter.get("/unhandled", (req, res, next) => {
+  // will be handled by Lapis default error handler
+  // it will print error to console and send to user 500 { ok: false }
+  throw new Error("Oh no! Unexpected error!");
+});
+
+usersRouter.get("/", (req, res) => {
+  if (req.query.pro !== undefined) {
+    // let's assume that pro can be 0 or 1
+    const pro = Boolean(Number(req.query.pro));
+    const foundUsers = users.filter((user) => user.pro === pro);
+    res.send(foundUsers);
+  } else {
+    res.send(users);
   }
 });
 
-// Finally, listen
+usersRouter.get("/:id", (req, res, next) => {
+  const user = users.find(
+    (candidate) => candidate.id === Number(req.params.id)
+  );
+  if (!user) {
+    // IMPORTANT - next() has to be called on logical leaf of a function
+    return next(new Error("NOT_FOUND"));
+  }
+  // we could remove return above and insert else {} here
+  res.send(user);
+});
+
+usersRouter.get("/:id/posts", (req, res, next) => {
+  const userPosts = posts.filter(
+    (post) => post.authorId === Number(req.params.id)
+  );
+  res.send(userPosts);
+});
+
+// it doesn't make sense, but it's just an example
+// also, this route will confuse the previous route /:id/posts
+// but it's only for example purpose
+usersRouter.get("/:id/posts/:post_id", (req, res, next) => {
+  console.log(req.params); // both id and post_id should show up here
+  const post = posts.find((_post) => _post.id === Number(req.params.post_id));
+  res.send(post);
+});
+
+postsRouter.get("/", (req, res, next) => {
+  res.send(posts);
+});
+
+postsRouter.get("/:id", (req, res, next) => {
+  const post = posts.find((_post) => _post.id === Number(req.params.id));
+  if (!post) {
+    /*
+      this error doesn't have any handler in postsRouter.
+      usersRouter "doesn't have jurisdiction" in here, so it can't handle it
+      lapis instance will handle it (see error middleware at the bottom)
+    */
+    next(new Error("POST_NOT_FOUND"));
+  } else {
+    res.send(post);
+  }
+});
+
+// You can specify more than one middleware!
+postsRouter.post(
+  "/",
+  (req, res, next) => {
+    const valid = req.body.title && req.body.content && req.body.authorId;
+    if (valid) {
+      next();
+    } else {
+      res.status(400).send({
+        error: "INVALID_BODY",
+      });
+    }
+  },
+  (req, res, next) => {
+    // Request content-type should be application/json
+    const newPost = {
+      id: posts.length + 1,
+      authorId: req.body.authorId,
+      title: req.body.title,
+      content: req.body.content,
+    };
+    posts.push(newPost);
+    res.status(201).send(newPost);
+  }
+);
+
+// this error handler will match only errors that occured in /api/users/*
+usersRouter.use((err, req, res, next) => {
+  if (err instanceof Error) {
+    if (err.message === "NOT_FOUND") {
+      return res.status(404).send({
+        error: err.message,
+      });
+    } else {
+      res.status(400).send({
+        error: "BAD_REQUEST",
+      });
+    }
+  } else {
+    res.status(500).send({
+      error: "INTERNAL_SERVER_ERROR",
+    });
+  }
+});
+
+apiRouter.use(usersRouter);
+apiRouter.use(postsRouter);
+
+lapis.use(apiRouter);
+
+/*
+  error handler MUST ALWAYS have 4 parameters -
+  it's neccessary for Lapis to recognize if that middleware is able to handle an error
+*/
+lapis.use((err, req, res, next) => {
+  res.status(500).send({
+    ok: false,
+    fromServerRoot: true,
+    error: err instanceof Error ? err.message : err,
+  });
+});
+
 lapis.listen({ port: PORT }).then(() => {
   console.log(`Listening on ${PORT}`);
 });
 ```
+
+## To Do
+
+Features I'm planning to implement:
+
+- authentication
+  - base
+  - bearer token (JSON Web Tokens)
+- custom request and response attributes, that will
+  enable storing more metadata (for example req.user after authentication)
