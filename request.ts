@@ -1,6 +1,7 @@
 import {
   ServerRequest,
 } from "https://deno.land/std@0.67.0/http/server.ts";
+import { CookieJar } from "./cookie_jar.ts";
 
 export interface QueryOrParams {
   [name: string]: string | string[];
@@ -11,6 +12,7 @@ export class LapisRequest {
   private _body?: any;
   private _query: QueryOrParams;
   private _params: QueryOrParams = {};
+  cookies?: CookieJar;
 
   constructor(request: ServerRequest) {
     this.request = request;

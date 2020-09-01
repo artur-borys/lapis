@@ -20,6 +20,14 @@ export class CookieJar {
     this.cookies = getCookies(request);
   }
 
+  toString() {
+    return JSON.stringify(this.cookies);
+  }
+
+  toJSON() {
+    return JSON.stringify(this.cookies);
+  }
+
   get(name: string): string | undefined {
     return this.cookies[name];
   }
