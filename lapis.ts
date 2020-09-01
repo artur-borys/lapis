@@ -1,79 +1,119 @@
 import {
   serve,
   HTTPOptions,
-  HTTPSOptions,
-  serveTLS,
   Server,
-  ServerRequest,
-  Response,
-} from "https://deno.land/std/http/server.ts";
+} from "https://deno.land/std@0.67.0/http/server.ts";
 import { LapisResponse } from "./response.ts";
 import { LapisRequest } from "./request.ts";
 import {
   Router,
-  MiddlewareFunction,
-  ErrorMiddlewareFunction,
 } from "./router.ts";
+import {
+  Middleware,
+  ErrorMiddlewareFunction,
+  MiddlewareFunction,
+} from "./middleware.ts";
+import { CookieJar } from "./cookie_jar.ts";
 
-export class Lapis {
+export class Lapis extends Router {
   port?: number;
   hostname?: string;
   certFile?: string;
   keyFile?: string;
   server?: Server;
-  middlewares: (MiddlewareFunction | ErrorMiddlewareFunction)[] = [];
 
-  end(req: LapisRequest, res: LapisResponse) {
-    res.status(404).send(`Cannot ${req.method} ${req.url}`);
-  }
-
-  async _loop() {
+  private async run() {
     if (this.server) {
       for await (const request of this.server!) {
         let res = new LapisResponse(request);
         const req = new LapisRequest(request);
         await req.parseBody();
-        res.headers?.set("Content-Type", "application/json");
-        const middlewares = [...this.middlewares, this.end].map(
-          (
-            middleware,
-            i,
-          ) =>
-            (error?: Error) => {
-              if (middleware.length === 4) {
-                return (middleware as ErrorMiddlewareFunction)(
+        // get middlewares that match the request
+        let matchingMiddlewares = Middleware.findMatching(
+          this.middlewares,
+          req,
+        );
+        // create functions which take optional error parameter and call middleware
+        const middlewaresToRun = matchingMiddlewares.map((
+          middleware,
+          i,
+        ) =>
+          (error?: Error): any => {
+            middleware.setParams(req);
+            // if there are no more defined middlewares, fallback to the default one
+            let next = middlewaresToRun[i + 1]
+              ? middlewaresToRun[i + 1]
+              : ((error?: any) =>
+                error
+                  ? this.defaultErrorHandler(error, req, res)
+                  : this.defaultHandler(req, res));
+            // there can either be an error or not
+            if (error) {
+              // if this middleware is an error handler - ok
+              if (middleware.handler.length === 4) {
+                return (middleware.handler as ErrorMiddlewareFunction)(
                   error,
                   req,
                   res,
-                  middlewares[i + 1],
+                  next,
                 );
               } else {
-                return (middleware as MiddlewareFunction)(
+                // if not, call the next middleware wrapper (hopefully it will recursively reach an error handler)
+                return next(error);
+              }
+            } else {
+              if (middleware.handler.length === 4) {
+                return next();
+              } else {
+                return (middleware.handler as MiddlewareFunction)(
                   req,
                   res,
-                  middlewares[i + 1],
+                  next,
                 );
               }
-            },
+            }
+          }
         );
-        middlewares[0]();
+        try {
+          if (middlewaresToRun.length === 0) {
+            this.defaultHandler(req, res);
+          } else {
+            middlewaresToRun[0]();
+          }
+        } catch (err) {
+          this.defaultErrorHandler(err, req, res);
+        }
       }
     }
   }
 
-  use(middleware: MiddlewareFunction | ErrorMiddlewareFunction | Router) {
-    if (middleware instanceof Router) {
-      this.middlewares = this.middlewares.concat(middleware.routes);
-    } else {
-      this.middlewares.push(middleware);
-    }
+  private defaultHandler(req: LapisRequest, res: LapisResponse) {
+    res.status(404).send({
+      code: 404,
+      message: `Cannot ${req.method} ${req.url}`,
+    });
   }
 
+  private defaultErrorHandler(
+    err: any,
+    req: LapisRequest,
+    res: LapisResponse,
+  ) {
+    console.error(err);
+    res.status(500).send({
+      ok: false,
+    });
+  }
+
+  /**
+   * Starts an http server with given options
+   * @param {HTTPOptions} options - options for server instance 
+   */
   listen(options: HTTPOptions): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
         this.server = serve(options);
-        this._loop();
+        this.run();
         resolve();
       } catch (e) {
         reject(e);
@@ -81,8 +121,24 @@ export class Lapis {
     });
   }
 
-  listenTLS(options: HTTPSOptions): Promise<void> {
-    const server = serveTLS(options);
-    return Promise.resolve();
+  /**
+   * Currently not implemented - will be in the future
+   */
+  listenTLS() {
+    throw new Error("NotImplemented");
+  }
+
+  /**
+   * Middleware that adds cookies to request and response
+   * @see CookieJar
+   * @param {LapisRequest} req 
+   * @param {LapisResponse} res 
+   * @param {Function} next 
+   */
+  static cookies(req: LapisRequest, res: LapisResponse, next: Function) {
+    const cookieJar = new CookieJar(req, res);
+    req.cookies = cookieJar;
+    res.cookies = cookieJar;
+    next();
   }
 }

@@ -2,10 +2,13 @@ import {
   Response,
   ServerRequest,
 } from "https://deno.land/std@0.67.0/http/server.ts";
+import { CookieJar } from "./cookie_jar.ts";
 
 export class LapisResponse {
   private request: ServerRequest;
   private response: Response;
+  private sent: boolean = false;
+  cookies?: CookieJar;
 
   constructor(request: ServerRequest) {
     this.request = request;
@@ -16,16 +19,21 @@ export class LapisResponse {
   }
 
   send(data?: string | object) {
-    if (data) {
-      if (typeof data === "object") {
-        data = JSON.stringify(data);
-        this.response.headers?.set("Content-Type", "application/json");
-      } else {
-        this.response.headers?.set("Content-Type", "text/plain");
+    if (!this.sent) {
+      this.sent = true;
+      if (data) {
+        if (typeof data === "object") {
+          data = JSON.stringify(data);
+          this.response.headers?.set("Content-Type", "application/json");
+        } else {
+          this.response.headers?.set("Content-Type", "text/plain");
+        }
+        this.response.body = data;
       }
-      this.response.body = data;
+      this.request.respond(this.response);
+    } else {
+      console.warn("Response has been already sent, cancelling");
     }
-    this.request.respond(this.response);
   }
 
   status(status: number) {
@@ -33,7 +41,7 @@ export class LapisResponse {
     return this;
   }
 
-  get headers() {
-    return this.response.headers;
+  get headers(): Headers {
+    return this.response.headers!;
   }
 }

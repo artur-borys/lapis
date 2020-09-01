@@ -1,39 +1,55 @@
-# Lapis
-
-This Deno module is created mainly for myself - to learn JS/TS.
-I will try to make it resemble `express` in a way. It's a wrapper around deno's std/http module.
-
-You can use this module if you wish, but it's not production ready and probably never will be - it's just for my own skills development.
-
-## Features
-
-- middlewares - standard and error handlers. Can be used on server instance and on routers
-- routing - you can create and connect routers. Each router can have a base path
-- path and query params
-- cookies
-- request data parsing
-  - JSON
-  - plain text
-- response encoding
-  - JSON
-  - plain text
-
-## Example
-
-```typescript
-import { Lapis, Router, MiddlewareFunction } from "./mod.ts";
+import { Lapis, Router, MiddlewareFunction } from "../mod.ts";
 const PORT = 3000;
 const lapis = new Lapis();
 const apiRouter = new Router("/api");
 const usersRouter = new Router("/users");
 const postsRouter = new Router("/posts");
 
+const users = [
+  {
+    id: 1,
+    nick: "user1",
+    pro: true,
+  },
+  {
+    id: 2,
+    nick: "user2",
+    pro: true,
+  },
+  {
+    id: 3,
+    nick: "user3",
+    pro: false,
+  },
+];
+
+const posts = [
+  {
+    id: 1,
+    title: "Post 1",
+    content: "This is post #1",
+    authorId: 1,
+  },
+  {
+    id: 2,
+    title: "Post 2",
+    content: "This is post #2",
+    authorId: 3,
+  },
+  {
+    id: 3,
+    title: "Post 3",
+    content: "THis is post #3",
+    authorId: 1,
+  },
+];
+
 // currently it's best to define standard middleware as a separate named function
 // to get type hints - use() recognizes only Router and ErrorMiddlewareFunction for some reason
 // I need to sort it out - I'm new to TypeScript
 const requestLogger: MiddlewareFunction = (req, res, next) => {
   console.log(
-    `Got a request from ${req.remoteAddr.hostname}: ${req.method} ${req.url}`
+    `Got a request from ${req.remoteAddr.hostname}: ${req.method} ${req.url}`,
   );
   next();
 };
@@ -75,8 +91,8 @@ usersRouter.get("/", (req, res) => {
 });
 
 usersRouter.get("/:id", (req, res, next) => {
-  const user = users.find(
-    (candidate) => candidate.id === Number(req.params.id)
+  const user = users.find((candidate) =>
+    candidate.id === Number(req.params.id)
   );
   if (!user) {
     // IMPORTANT - next() has to be called on logical leaf of a function
@@ -87,8 +103,8 @@ usersRouter.get("/:id", (req, res, next) => {
 });
 
 usersRouter.get("/:id/posts", (req, res, next) => {
-  const userPosts = posts.filter(
-    (post) => post.authorId === Number(req.params.id)
+  const userPosts = posts.filter((post) =>
+    post.authorId === Number(req.params.id)
   );
   res.send(userPosts);
 });
@@ -121,30 +137,26 @@ postsRouter.get("/:id", (req, res, next) => {
 });
 
 // You can specify more than one middleware!
-postsRouter.post(
-  "/",
-  (req, res, next) => {
-    const valid = req.body.title && req.body.content && req.body.authorId;
-    if (valid) {
-      next();
-    } else {
-      res.status(400).send({
-        error: "INVALID_BODY",
-      });
-    }
-  },
-  (req, res, next) => {
-    // Request content-type should be application/json
-    const newPost = {
-      id: posts.length + 1,
-      authorId: req.body.authorId,
-      title: req.body.title,
-      content: req.body.content,
-    };
-    posts.push(newPost);
-    res.status(201).send(newPost);
+postsRouter.post("/", (req, res, next) => {
+  const valid = req.body.title && req.body.content && req.body.authorId;
+  if (valid) {
+    next();
+  } else {
+    res.status(400).send({
+      error: "INVALID_BODY",
+    });
   }
-);
+}, (req, res, next) => {
+  // Request content-type should be application/json
+  const newPost = {
+    id: posts.length + 1,
+    authorId: req.body.authorId,
+    title: req.body.title,
+    content: req.body.content,
+  };
+  posts.push(newPost);
+  res.status(201).send(newPost);
+});
 
 // this error handler will match only errors that occured in /api/users/*
 usersRouter.use((err, req, res, next) => {
@@ -185,14 +197,3 @@ lapis.use((err, req, res, next) => {
 lapis.listen({ port: PORT }).then(() => {
   console.log(`Listening on ${PORT}`);
 });
-```
-
-## To Do
-
-Features I'm planning to implement:
-
-- authentication
-  - base
-  - bearer token (JSON Web Tokens)
-- custom request and response attributes, that will
-  enable storing more metadata (for example req.user after authentication)

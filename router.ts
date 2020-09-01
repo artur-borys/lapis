@@ -1,6 +1,9 @@
-import { LapisRequest } from "./request.ts";
-import { LapisResponse } from "./response.ts";
-import { matchPath, extractParams } from "./utils/URL.ts";
+import {
+  Middleware,
+  MiddlewareFunction,
+  ErrorMiddlewareFunction,
+  Endpoint,
+} from "./middleware.ts";
 
 export enum HTTPMethods {
   GET = "GET",
@@ -13,31 +16,19 @@ export enum HTTPMethods {
   ANY = "*",
 }
 
-function methodMatch(candidate: HTTPMethods, target: string) {
-  if (candidate === HTTPMethods.ANY) {
-    return true;
-  } else {
-    return candidate === target;
-  }
-}
-
-export interface MiddlewareFunction extends Function {
-  (req: LapisRequest, res: LapisResponse, next: Function): any;
-}
-
-export interface ErrorMiddlewareFunction extends Function {
-  (
-    err: Error | undefined,
-    req: LapisRequest,
-    res: LapisResponse,
-    next?: Function,
-  ): any;
-}
-
+/**
+ * Router stores route handlers and middlewares.
+ * It can have a base URL specified, which will be prepended to every route.
+ * Every middleware will only work on requests that point to URL that starts with that base.
+ */
 export class Router {
-  private _routes: MiddlewareFunction[] = [];
+  private _middlewares: Middleware[] = [];
   private _base: string;
 
+  /**
+   * 
+   * @param base - base URL to be prepended to every route
+   */
   constructor(base: string = "") {
     this._base = base;
   }
@@ -45,51 +36,95 @@ export class Router {
   private route(
     path: string,
     method: HTTPMethods,
-    middleware: MiddlewareFunction,
+    middlewareHandler: MiddlewareFunction | ErrorMiddlewareFunction,
   ) {
-    const wrappedMiddleware: MiddlewareFunction = (req, res, next) => {
-      const thePath = `${this._base}${path}`;
-      if (matchPath(req.url, thePath)) {
-        if (methodMatch(method, req.method)) {
-          req.params = extractParams(req.url, thePath);
-          return middleware(req, res, next);
-        }
-      }
-      return next();
+    const endpoint: Endpoint = {
+      path: () => `${this._base}${path}`,
+      method: method,
     };
-
-    this._routes.push(wrappedMiddleware);
+    this._middlewares.push(new Middleware(middlewareHandler, endpoint));
   }
 
-  get routes() {
-    return this._routes;
+  /**
+   * @returns {(MiddlewareFunction | ErrorMiddlewareFunction)[]} - all middlewares, internal usage only
+   */
+  get middlewares() {
+    return this._middlewares;
   }
 
-  all(path: string, middleware: MiddlewareFunction) {
-    this.route(path, HTTPMethods.ANY, middleware);
+  /**
+   * Pushes given middleware or merges another router's middlewares with this router's middlewares
+   * @param middlewareHandler - middleware to use or another router to merge with
+   */
+  use(
+    middlewareHandler: MiddlewareFunction | ErrorMiddlewareFunction | Router,
+  ) {
+    if (middlewareHandler instanceof Router) {
+      // prepend this router's base to the router's being used base
+      middlewareHandler._base = this._base + middlewareHandler._base;
+      this._middlewares = this._middlewares.concat(
+        middlewareHandler.middlewares,
+      );
+    } else {
+      this._middlewares.push(
+        new Middleware(middlewareHandler, {
+          path: () => `${this._base}/*`,
+          method: HTTPMethods.ANY,
+        }),
+      );
+    }
   }
 
-  get(path: string, middleware: MiddlewareFunction) {
-    this.route(path, HTTPMethods.GET, middleware);
+  /**
+   * Uses specified middleware(s) on given path, matching all HTTP methods
+   * @param path - the path to handle
+   * @param middlewares - one or more middlewares (NOT an array)
+   */
+  all(path: string, ...middlewares: MiddlewareFunction[]) {
+    middlewares.forEach((middleware) => {
+      this.route(path, HTTPMethods.ANY, middleware);
+    });
   }
 
-  head(path: string, middleware: MiddlewareFunction) {
-    this.route(path, HTTPMethods.HEAD, middleware);
+  /**
+   * Uses specified middleware(s) on given path, if request method is GET.
+   * All other methods match HTTP methods according to their name (post matches POST, delete matches DELETE etc.)
+   * @param path - the path to hand;e
+   * @param middlewares - one or more middlewares (NOT an array)
+   */
+  get(path: string, ...middlewares: MiddlewareFunction[]) {
+    middlewares.forEach((middleware) => {
+      this.route(path, HTTPMethods.GET, middleware);
+    });
   }
 
-  post(path: string, middleware: MiddlewareFunction) {
-    this.route(path, HTTPMethods.POST, middleware);
+  head(path: string, ...middlewares: MiddlewareFunction[]) {
+    middlewares.forEach((middleware) => {
+      this.route(path, HTTPMethods.HEAD, middleware);
+    });
   }
 
-  put(path: string, middleware: MiddlewareFunction) {
-    this.route(path, HTTPMethods.PUT, middleware);
+  post(path: string, ...middlewares: MiddlewareFunction[]) {
+    middlewares.forEach((middleware) => {
+      this.route(path, HTTPMethods.POST, middleware);
+    });
   }
 
-  patch(path: string, middleware: MiddlewareFunction) {
-    this.route(path, HTTPMethods.PATCH, middleware);
+  put(path: string, ...middlewares: MiddlewareFunction[]) {
+    middlewares.forEach((middleware) => {
+      this.route(path, HTTPMethods.PUT, middleware);
+    });
   }
 
-  delete(path: string, middleware: MiddlewareFunction) {
-    this.route(path, HTTPMethods.DELETE, middleware);
+  patch(path: string, ...middlewares: MiddlewareFunction[]) {
+    middlewares.forEach((middleware) => {
+      this.route(path, HTTPMethods.PATCH, middleware);
+    });
+  }
+
+  delete(path: string, ...middlewares: MiddlewareFunction[]) {
+    middlewares.forEach((middleware) => {
+      this.route(path, HTTPMethods.DELETE, middleware);
+    });
   }
 }
