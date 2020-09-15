@@ -1,6 +1,6 @@
 import { matchPath, extractParams } from "./utils/URL.ts";
-import { LapisRequest } from "./request.ts";
-import { LapisResponse } from "./response.ts";
+import type { LapisRequest } from "./request.ts";
+import type { LapisResponse } from "./response.ts";
 import { HTTPMethods } from "./router.ts";
 
 export type MiddlewareFunction = (

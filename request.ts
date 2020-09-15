@@ -1,7 +1,5 @@
-import {
-  ServerRequest,
-} from "https://deno.land/std@0.67.0/http/server.ts";
-import { CookieJar } from "./cookie_jar.ts";
+import type { ServerRequest } from "https://deno.land/std@0.69.0/http/server.ts";
+import type { CookieJar } from "./cookie_jar.ts";
 
 export interface QueryOrParams {
   [name: string]: string | string[];

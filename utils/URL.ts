@@ -1,4 +1,4 @@
-import { QueryOrParams } from "../request.ts";
+import type { QueryOrParams } from "../request.ts";
 
 /**
  * Removes slash repetitions from the url. Ex. //some/path///string// -> /some/path/string/

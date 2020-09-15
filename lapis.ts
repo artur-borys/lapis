@@ -1,8 +1,4 @@
-import {
-  serve,
-  HTTPOptions,
-  Server,
-} from "https://deno.land/std@0.67.0/http/server.ts";
+import { serve, HTTPOptions, Server } from "https://deno.land/std@0.69.0/http/server.ts";
 import { LapisResponse } from "./response.ts";
 import { LapisRequest } from "./request.ts";
 import {

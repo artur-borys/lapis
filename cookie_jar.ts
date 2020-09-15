@@ -3,7 +3,7 @@ import {
   getCookies,
   setCookie,
   deleteCookie,
-} from "https://deno.land/std@0.67.0/http/mod.ts";
+} from "https://deno.land/std@0.69.0/http/mod.ts";
 
 interface HasHeaders {
   headers: Headers;
