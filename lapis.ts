@@ -58,15 +58,12 @@ export class Lapis extends Router {
                 return next(error);
               }
             } else {
-              if (middleware.handler.length === 4) {
-                return next();
-              } else {
-                return (middleware.handler as MiddlewareFunction)(
-                  req,
-                  res,
-                  next,
-                );
-              }
+              if (middleware.handler.length === 4) return next();
+              return (middleware.handler as MiddlewareFunction)(
+                req,
+                res,
+                next,
+              );
             }
           }
         );

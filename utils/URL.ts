@@ -15,11 +15,7 @@ export function removeSlashDoubles(url: string): string {
  * @returns {string} url without trailing slash
  */
 export function removeTrailingSlash(url: string): string {
-  if (url.length > 1) {
-    if (url.endsWith("/")) {
-      return url.slice(0, -1);
-    }
-  }
+  if (url.length > 1 && url.endsWith("/")) return url.slice(0, -1);
   return url;
 }
 
@@ -41,16 +37,10 @@ export function sanitize(url: string): string {
 export function matchWithParams(requestUrl: string, modelUrl: string): boolean {
   const modelParts = modelUrl.split("/");
   const requestParts = requestUrl.split("/");
-  if (modelParts.length !== requestParts.length) {
-    return false;
-  }
+  if (modelParts.length !== requestParts.length) return false;
   for (let i = 0; i < modelParts.length; i++) {
-    if (modelParts[i].startsWith(":")) {
-      continue;
-    }
-    if (modelParts[i] !== requestParts[i]) {
-      return false;
-    }
+    if (modelParts[i].startsWith(":")) continue;
+    if (modelParts[i] !== requestParts[i]) return false;
   }
   return true;
 }
@@ -102,14 +92,9 @@ export function matchPath(requestUrl: string, modelUrl: string): boolean {
   */
   modelUrl = sanitize(modelUrl);
   const noQueryString = sanitize(requestUrl.split("?")[0]);
-  if (hasParams(modelUrl)) {
-    return matchWithParams(noQueryString, modelUrl);
-  } else {
-    // only middleware can have * in path so we don't have to look for params
-    if (modelUrl.endsWith("*")) {
-      return noQueryString.startsWith(modelUrl.slice(0, -2));
-    } else {
-      return noQueryString === modelUrl;
-    }
-  }
+  if (hasParams(modelUrl)) return matchWithParams(noQueryString, modelUrl);
+
+  // only middleware can have * in path so we don't have to look for params
+  if (modelUrl.endsWith("*")) return noQueryString.startsWith(modelUrl.slice(0, -2));
+  return noQueryString === modelUrl;
 }
